@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="wxfalsecolor : A wxPython GUI for the Radiance falsecolor2 tool ">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>wxfalsecolor</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/tbleicher/wxfalsecolor">View on GitHub</a>
+
+          <h1 id="project_title">wxfalsecolor</h1>
+          <h2 id="project_tagline">A wxPython GUI for the Radiance falsecolor2 tool </h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/tbleicher/wxfalsecolor/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/tbleicher/wxfalsecolor/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
+<a id="wxfalsecolor" class="anchor" href="#wxfalsecolor" aria-hidden="true"><span class="octicon octicon-link"></span></a>wxfalsecolor</h1>
+
+<p>A wxPython GUI for the Radiance falsecolor2 tool</p>
+
+<h2>
+<a id="download" class="anchor" href="#download" aria-hidden="true"><span class="octicon octicon-link"></span></a>Download</h2>
+
+<p>Latest binary packages can be found in the Releases section.</p>
+
+<h2>
+<a id="usage" class="anchor" href="#usage" aria-hidden="true"><span class="octicon octicon-link"></span></a>Usage</h2>
+
+<p>On Windows simply drag-and-drop a Radiance *.hdr file on the executable.</p>
+
+<p>Command line: python wxfalsecolor.py [image.hdr]</p>
+
+<p><code>falsecolor2</code> is a Python rewrite of the <code>falsecolor</code> c-shell script in the Radiance distribution. The main purpose was to have a falsecolor script for Windows but I added a few extra bits on the way.</p>
+
+<p><code>wxfalsecolor</code> is a graphical frontend to <code>falsecolor2</code>. It also implements a few features of ximage so it can be used to display Radiance RGBE images and read luminance/illuminance values.</p>
+
+<p>Like the original <code>falsecolor2</code> relies on the Radiance image tools which you need to have installed on your system.</p>
+
+<h2>
+<a id="features" class="anchor" href="#features" aria-hidden="true"><span class="octicon octicon-link"></span></a>Features</h2>
+
+<p><code>falsecolor2</code> supports all features of the original <code>falsecolor</code>. I have added a few new features and some of the original features behave a bit differently:</p>
+
+<ul>
+<li>The formatting of the default legend is different.</li>
+<li>
+<code>-cb</code> creates a falsecolor image of discreet colours instead of an obese variation of contour lines.</li>
+<li>
+<code>-h</code> shows a summary of the command line options. This option does not create an image but prints a help message to stdout (terminal).</li>
+<li>
+<code>-lp</code> allows you to specify the legend position; legends above and below the image are horizontal instead of vertical.</li>
+<li>
+<code>-mask &lt;minvalue&gt;</code> masks all values below minvalue with the background color (black).</li>
+<li>
+<code>-z</code> creates legends starting at 0</li>
+<li>
+<code>-s auto</code> option for automatic legend scale adjustment</li>
+</ul>
+
+<p>With <code>wxfalsecolor</code> you can</p>
+
+<ul>
+<li>load and display Radiance RGBE images</li>
+<li>drag-and-drop images in a desktop environment</li>
+<li>view image headers</li>
+<li>display RGB and Lux values (even after conversion to falsecolor image)</li>
+<li>set <code>falsecolor2</code> options interactively</li>
+<li>set <code>pcond</code> options interactively</li>
+<li>display labels for spot and average pixel values (like <code>ximage</code>)</li>
+<li>save image as bitmap</li>
+</ul>
+
+<h2>
+<a id="documentation" class="anchor" href="#documentation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Documentation</h2>
+
+<p>TODO: link to github sites</p>
+
+<h2>
+<a id="history" class="anchor" href="#history" aria-hidden="true"><span class="octicon octicon-link"></span></a>History</h2>
+
+<p>The code base was migrated from the original 'pyrat' repository on code.google.com and subsequently split into this dedicated wxfalsecolor repository. </p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">wxfalsecolor maintained by <a href="https://github.com/tbleicher">tbleicher</a></p>
+        <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
