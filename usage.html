@@ -1,0 +1,195 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>wxfalsecolor.usage by tbleicher</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1 class="header">wxfalsecolor</h1>
+        <ul>
+          <li><a class="buttons linkback" href="./index.html">front page</a></li>
+        </ul>
+        <p class="header">A wxPython GUI for the Radiance falsecolor2 tool </p>
+
+        <ul>
+          <li class="download"><a class="buttons" href="https://github.com/tbleicher/wxfalsecolor/zipball/master">Download EXE</a></li>
+          <li class="download"><a class="buttons" href="https://github.com/tbleicher/wxfalsecolor/zipball/master">Download ZIP</a></li>
+          <li class="download"><a class="buttons" href="https://github.com/tbleicher/wxfalsecolor/tarball/master">Download TAR</a></li>
+          <li><a class="buttons github" href="https://github.com/tbleicher/wxfalsecolor">View On GitHub</a></li>
+        </ul>
+
+        <p class="header">This project is maintained by <a class="header name" href="https://github.com/tbleicher">tbleicher</a></p>
+
+      </header>
+      <section>
+
+<h1>
+  <a id="wxfalsecolor" class="anchor" href="#wxfalsecolor"
+    aria-hidden="true"><span class="octicon
+      octicon-link"></span></a>wxfalsecolor - Usage</h1>
+
+<p>The script can take an image as a command line argument, so you can use it like ximage.</p>
+
+<pre>wxfalsecolor image.hdr</pre>
+
+<p>The application window will start in a default size. There is no
+need to resize a particularly large image that wouldn't fit on the
+screen.</p>
+
+
+<h3>
+  <a id="controlpanel" class="anchor" href="#usage" aria-hidden="true"><span class="octicon octicon-link"></span></a>Control Panel</h3>
+
+<img class="left" src="./images/wx_panel.png" alt="wxfalsecolor tools panel">
+
+<p>The control panel on the left side shows all the available action
+and option buttons. It's has three static buttons 
+(<strong>open, save</strong> and <strong>quit</strong> at the bottom) 
+and  alternately visible folding panels dedicated to a particular
+task.</p>  
+
+<p>To open a new image press the <strong>open HDR</strong> button and 
+browse for the image or just drag the image in the right picture panel.</p>
+
+<p>The images will be converted to a temporary LDR image file and this image
+will be displayed in the window. Large images will be scaled to fit in the 
+frame so you can always see the full content on the image. Resize the frame
+to fit the proportions of the image and rescale the image to match your screen.
+The rescaling only happens in 10% increments and the image will not be
+enlarged to fill the frame. You can see the currently applied scale factor
+in the bottom right corner below the image.</p>
+
+<p>Once the image is loaded you can use the tools in the
+<strong>lables, falsecolor</strong> and <strong>display</strong> sections
+to annotate and modify the original HDR image. Note that all changes are
+applied to temporary files so your original image will not be modified. You
+can save the modified image as BMP, PPM, TIF or HDR image to preserve the
+changes and filters that you have applied.</p>
+
+<p>The <strong>save image</strong> button will save the HDR image that is
+produced by the <code>falsecolor2</code> and <code>pcond</code> tools to a
+permanent image on your hard drive. If you choose an LDR format it will be
+converted to another format on the fly but the size will be based on the
+size of the input HDR image, not the size of the image currently displayed
+on the screen. I. e. an image that was originally 3000px wide and displayed
+in a 800px wide window will be saved with the original 3000px of the HDR
+image.</p>
+
+<p>A comment on file names and image formats: On Windows the format will
+be determined by the extension of the new image name while on OS X the
+appropriate extension is appended to the filename. So if you name your
+new file <em>image.jpg</em> and select <em>BMP</em> as file format you will
+get a BMP called <em>image.bmp</em> on Windows and a BMP called
+<em>image.jpg.bmp</em> on OS X and Linux.</p> 
+
+
+<h3>
+  <a id="display" class="anchor" href="#display"
+    aria-hidden="true"><span class="octicon
+      octicon-link"></span></a>Display Features</h3>
+
+<img class="left" src="./images/wx_labels.png" alt="wxfalsecolor tools panel">
+
+<p>Under the <code>lables</code> foldout panel you can find the
+<code>load data</code> button.
+If you want to show pixel values as labels on the screen you have to
+click this button first to load the pixel data into memory. This can
+take a while, especially for large images. After that the button will
+be relabeled to "clear labels" and you can use it to remove all the
+labels you have placed on the screen so far.</p>
+
+<p><strong>Placing labels:</strong> Once the data is loaded you can click
+on a point in the image and a label with the corresponding luminance value
+will be displayed overlayed on top of the image. The luminance is
+calculated using the formula</p>
+
+<pre>L=179*(0.265*r+0.67*g+0.065*b</pre>
+
+Which gives you a correct value in <em>Lux</em> if the image was
+calculated with the <code>-i</code> option of rpict. You can set the text
+that is displayed in front of the value in the text box. You can also
+click-and-drag to describe a rectangular area on the image for which the
+average value will be displayed. Note that pixels which are completely 
+black (red == 0) will not be counted in the average so a black background
+will not influence the results of the average calculation.</p>
+
+<p>The <strong>save bitmap</strong> button allows you to save a copy of
+image to an LDR image <em>as displayed on the screen</em>. This means that
+the image will be of the size as in the window on the screen and it
+will show all the labels you have currently displayed.</p>
+
+<p><img src="./images/wx_labels_example.png" alt="example HDR labels"></p>
+
+
+<h3>
+  <a id="falsecolor" class="anchor" href="#falsecolor"
+    aria-hidden="true"><span class="octicon
+      octicon-link"></span></a>Falsecolor Feature</h3>
+
+<img class="left" src="./images/wx_falsecolor.png" alt="falsecolor options">
+
+<p>Once you have opened an image you can set options for the
+<code>falsecolor2</code> conversion. 
+When you press <code>convert</code> 
+(or <code>update fc</code> after that) the
+image will converted and the result displayed.</p>
+
+<img style="clear: both;" src="./images/wx_fcexample.png" alt="falsecolor
+settings">
+
+
+<h3>
+  <a id="misc" class="anchor" href="#misc"
+    aria-hidden="true"><span class="octicon
+      octicon-link"></span></a>Display - Working with pcond</h3>
+
+<img class="left" src="./images/wx_display.png" alt="wxfalsecolor display
+filter tools">
+
+<p>Unter the <strong>display</strong> foldout you can find options for the
+<code>pcond</code> radiance tool to apply to the HDR image. Once you have </p>
+
+
+<h3>
+  <a id="misc" class="anchor" href="#misc"
+    aria-hidden="true"><span class="octicon
+      octicon-link"></span></a>Misc</h3>
+
+<img class="left" src="./images/wx_misc.png" alt="wxfalsecolor misc tools">
+
+<p>Unter the <strong>misc</strong> foldout you can find a button to show
+the header of the Radiance image. If you have modified the HDR image the
+new header of the new image will be shown, too. Here you can find for example
+the new exposure value of the image.</p>
+
+<p>The <strong>check update</strong> button makes an online check at the
+Github code repository to see if a new version of the Windows executable is
+available. You will be prompted to download the new executeable if one
+found. If you are using the Python source on Max OS X or Linus you can check
+for a new package on the same page at Github.</p>
+
+<p>The <strong>about</strong> button displays information of the application itself,
+which includes also the version number.</p>
+
+<!-- content -->
+
+      </section>
+      <footer>
+        <p><small>Hosted on <a href="https://pages.github.com">GitHub Pages</a> using the Dinky theme</small></p>
+      </footer>
+    </div>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+		
+  </body>
+</html>
