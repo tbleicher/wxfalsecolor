@@ -287,7 +287,9 @@ class FalsecolorBase:
         if data_in:
             self._log.debug("data_in= %d bytes" % len(data_in))
         try:
-            p = Popen(shlex.split(cmd), bufsize=-1, stdin=PIPE, stdout=data_out, stderr=PIPE)
+            # 2015-May-09: switching to line buffered output to
+            # improve reading of large image data on Windows
+            p = Popen(shlex.split(cmd), bufsize=1, stdin=PIPE, stdout=data_out, stderr=PIPE)
             data, err = p.communicate(data_in)
         except OSError, strerror:
             raise OSError(strerror)
