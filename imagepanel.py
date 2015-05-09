@@ -134,6 +134,7 @@ class ImagePanel(wx.Panel):
             return False
         else:
             self.SetCursor(wx.StockCursor(wx.CURSOR_DEFAULT))
+            self.rgbeImg.setLegendOffset()
             xn,yn = self.rgbeImg.legendoffset
             self.adjustLabels(xn-xo, yn-yo)
             self.update()

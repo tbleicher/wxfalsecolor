@@ -45,29 +45,25 @@ class RGBEImage(FalsecolorImage):
 
 
     def doFalsecolor(self, *args, **kwargs):
-        """set legendoffset after falsecolor conversion"""
-        if FalsecolorImage.doFalsecolor(self) != True:
-            self._log.error("FalsecolorImage.doFalsecolor() == False")
+        """check and display errors during falsecolor conversion"""
+        if FalsecolorImage.doFalsecolor(self) == True:
+            return True
+        self._log.error("FalsecolorImage.doFalsecolor() == False")
         if self.error:
             msg = "falsecolor2 error:\n%s" % self.error
             self.showError(msg)
-            return False
-        self.legendoffset = (0,0)
-        if self.legend.position.startswith("W"):
-            self.legendoffset = (self.legend.width,0)
-        elif self.legend.position.startswith("N"):
-            self.legendoffset = (0,self.legend.height)
-        return True
+        return False
 
 
-    def doPcond(self, args):
+    def _doPcommand(self, cmdname, args):
         """condition image with pcond"""
         self._log.debug("doPcond() args=%s" % str(args)) 
         if self.picture == "-":
             path = self._createTempFile()
         else:
             path = self.picture
-        cmd = "pcond %s '%s'" % (" ".join(args), path)
+        args = map(str, args)
+        cmd = "%s %s '%s'" % (cmdname, " ".join(args), path)
         try:
             data = self._popenPipeCmd(cmd, None)
             if data:
@@ -75,9 +71,44 @@ class RGBEImage(FalsecolorImage):
                 self.legendoffset = (0,0)
                 return True
         except Exception, err:
-            msg = "pcond error:\n%s" % self.error
+            msg = "%s error:\n%s" % (cmdname, self.error)
             self.showError(msg)
             return False
+
+
+    def doPcond(self, args):
+        """condition image with pcond"""
+        return self._doPcommand('pcond', args)
+
+
+    def doPfilt(self, args):
+        """apply pfilt to image data"""
+        return self._doPcommand('pfilt', args)
+
+
+    def getBackupName(self):
+        """return filename for backup image"""
+        size = "%dx%d" % self.getImageResolution()
+        if self.picture != "-":
+            base,ext = os.path.splitext(self.picture)
+            filename = "".join([base, "_", size, ".hdr"])
+        else:
+            filename = "unnamed_%s.hdr" % size
+        if not os.path.exists(filename):
+            return filename
+        else:
+            return self._increment_filename(filename)
+
+
+    def _increment_filename(self, name):
+        """add number to filename"""
+        path, ext = os.path.splitext(name)
+        n = 1
+        new = "%s_%02d%s" % (path, n, ext) 
+        while os.path.exists(new):
+            n += 1
+            new = "%s_%d%s" % (path, n, ext)
+        return new
 
 
     def getDataHeader(self):
@@ -146,6 +177,12 @@ class RGBEImage(FalsecolorImage):
         else:
             self._hasArray = self.readArrayDataBIN(wxparent)
             return self._hasArray
+
+
+    def hasFilepath(self):
+        """return True if image is associated with file"""
+        if self.picture != "-":
+            return True
 
 
     def readArrayDataBIN(self, wxparent):
@@ -237,6 +274,14 @@ class RGBEImage(FalsecolorImage):
         self._array = False
 
 
+    def resize(self, new_x, new_y):
+        """resize image in place"""
+        args = ['-1', '-x', new_x, '-y', new_y, '-r', '0.6']
+        if self.doPfilt(args) == True:
+            self._input = self.data
+            self._analyzeImage()    # reads image header and resolution
+        
+
     def saveToAny(self, path):
         """convert self.data to image format supported by wx"""
         ext = os.path.splitext(path)[1]
@@ -280,6 +325,15 @@ class RGBEImage(FalsecolorImage):
             data = self.data
         cmd = str("ra_tiff -z - \"%s\"" % path) 
         self._popenPipeCmd(cmd, self.data)
+
+    
+    def setLegendOffset(self):
+        """set offset for legend based on legend position"""
+        self.legendoffset = (0,0)
+        if self.legend.position.startswith("W"):
+            self.legendoffset = (self.legend.width,0)
+        elif self.legend.position.startswith("N"):
+            self.legendoffset = (0,self.legend.height)
 
 
     def setOptions(self, args):

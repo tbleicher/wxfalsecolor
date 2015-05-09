@@ -319,7 +319,7 @@ class FalsecolorOptionParser(FalsecolorBase):
         self.validators = {
             '-lw'   : ('setLegendWidth',    self._validateInt,    True),
             '-lh'   : ('setLegendHeight',   self._validateInt,    True),
-            '-z'    : ('setLegendOffset',   self._validateBool,   False),
+            '-z'    : ('setZeroOffset',     self._validateBool,   False),
             '-lp'   : ('setLegendPosition', self._validatePos,    True),
             '-l'    : ('setLegendLabel',    self._validateTrue,   True),
             '-log'  : ('setDecades',        self._validateInt,    True),
@@ -484,7 +484,7 @@ class FalsecolorOptionParser(FalsecolorBase):
 
 
     def _validateTrue(self, k, v):
-        """return true in any case"""
+        """TODO"""
         return v
 
 
@@ -1043,7 +1043,7 @@ class FalsecolorImage(FalsecolorBase):
     def setLegendLabel(self, s):
         self.legend.label = s
 
-    def setLegendOffset(self, n):
+    def setZeroOffset(self, n):
         """set offset for legend"""
         self.zerooff = n
         self.legend.zerooff = 0

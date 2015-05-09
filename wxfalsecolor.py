@@ -58,7 +58,8 @@ from falsecolor2 import FalsecolorOptionParser, InterfaceBase
 from imagepanel import ImagePanel
 from rgbeimage import RGBEImage, WX_IMAGE_FORMATS, WX_IMAGE_WILDCARD
 from updatemanager import UpdateManager
-
+from rad_utils import beautyscale
+from resizedialog import ResizeDialog
 
 DATE_FORMAT = "%a %b %d %H:%M:%S %Y"
 
@@ -536,14 +537,31 @@ class WxfcFrame(wx.Frame):
             ## call OnShowValues with fake event
             self.lablecontrols.OnShowValues(-1)
         else:
-            self.statusbar.SetStatusText("confirm 'load data'")
-            msg = "This is a large image.\nDo you want to load image data now?"
-            dlg = wx.MessageDialog(self, message=msg, caption="Load data?", style=wx.YES_NO|wx.YES_DEFAULT|wx.ICON_QUESTION)
-            if dlg.ShowModal() == wx.ID_YES:
+            self.statusbar.SetStatusText("confirm 'load data' or resize image")
+            nx, ny = beautyscale(x, y, max_size)
+            info = { 'x': x, 'y': y, 'new_x': nx, 'new_y': ny,
+                'backup_name': self.rgbeImg.getBackupName(),
+                'do_resize': False}
+            dlg = ResizeDialog(parent=self, ID=-1, title="foo")
+            dlg.setImageInfo(info);
+            
+            result = dlg.ShowModal()
+            if result == wx.ID_OK:
+                if dlg.cb_resize.IsChecked():
+                    self.resizeRGBEImage(dlg)
+                else:
+                    self._log.info("loading original image data")
                 self.lablecontrols.OnShowValues(-1)
             else:
+                self._log.info("loading of image data cancelled by user")
                 self.lablecontrols.reset()
                 self.statusbar.SetStatusText("skipping 'load data'.")
+            dlg.Destroy()
+            
+            #msg = "This is a large image.\nDo you want to load image data now?"
+            #dlg = wx.MessageDialog(self, message=msg, caption="Load data?", style=wx.YES_NO|wx.YES_DEFAULT|wx.ICON_QUESTION)
+            #if dlg.ShowModal() == wx.ID_YES:
+            #else:
 
 
     def loadValues(self):
@@ -610,6 +628,23 @@ class WxfcFrame(wx.Frame):
             self.imagepanel.update(self.rgbeImg)
             if self.rgbeImg.isIrridiance():
                 self.fccontrols.reset("Lux")
+
+    
+    def resizeRGBEImage(self, dlg):
+        """create backup copy, resize and save image"""
+        w = int(dlg.img_width.GetValue())
+        h = int(dlg.img_height.GetValue())
+        backup = dlg.img_backup.GetValue()
+        self._log.info("resizing image: w=%d, h=%d, backup='%s'" % (w,h,backup))
+        
+        if backup != "":
+            self.rgbeImg.saveToFile(backup)
+        
+        self.rgbeImg.resize(w, h)
+        
+        if self.rgbeImg.hasFilepath():
+            self.rgbeImg.saveToFile(self.rgbeImg.picture)
+            self.rgbeImg.readImageData(self.rgbeImg.picture)
 
 
     def setPath(self, path):
