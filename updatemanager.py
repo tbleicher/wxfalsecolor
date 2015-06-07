@@ -107,6 +107,9 @@ class IncrementalDownloader(object):
 
 
 
+
+
+
 class DownloadParser(HTMLParser):
     """parses the project's wxfalsecolor.exe download site"""
 
@@ -330,7 +333,7 @@ class UpdateDetailsDialog(wx.Dialog):
         sizer.Add(label, 0, wx.ALIGN_CENTRE|wx.ALL, 15)
         
         ## grid of title - value fields
-        self._layo_labels(sizer, details, font_dflt15)
+        self._layout_labels(sizer, details, font_dflt15)
         
         ## divider
         line = wx.StaticLine(self, -1, size=(20,-1), style=wx.LI_HORIZONTAL)
@@ -351,7 +354,7 @@ class UpdateDetailsDialog(wx.Dialog):
         return sizer
 
 
-    def _layo_labels(self, sizer, details, font_dflt):
+    def _layout_labels(self, sizer, details, font_dflt):
         """create text labels for keys in details dict"""
         font_bold = wx.Font(font_dflt.GetPointSize(),
                 font_dflt.GetFamily(),
@@ -611,3 +614,6 @@ class UpdateManager(object):
             self.getDownloadPage()
             self.parseText()
         return self._parser.isUpdate(self.date)
+
+
+
