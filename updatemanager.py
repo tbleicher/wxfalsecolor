@@ -1,13 +1,16 @@
 
 import os
-import urllib2
+import json
+import requests
 import time
-from HTMLParser import HTMLParser
+import cStringIO
+
+from distutils.version import StrictVersion
 
 import wx
-import wx.lib.scrolledpanel as scrolled 
+import wx.lib.scrolledpanel as scrolled
 
-URL_WXFALSECOLOR = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor.exe"
+
 
 
 
@@ -31,267 +34,6 @@ class DummyLogger(object):
 
 
 
-class IncrementalDownloader(object):
-    """downloads data while updating a wx.ProgressDialog instance"""
-
-    def __init__(self, url, dlg=None, logger=None):
-        """create new instace with url (and optional dialog)"""
-
-        self._log = logger if logger else DummyLogger()
-        
-        self._url = url
-        self._dlg = dlg
-        self._content_length = 0
-        self.error = None
-
-
-    def update_dialog(self, bytes_so_far):
-        """update progress bar to percentage of download"""
-        if self._content_length != 0:
-            percent = float(bytes_so_far) / self._content_length
-            percent = round(percent*100, 2)
-        else:
-            self._log.warning("update_dialog called while self._content_length == 0")
-            return
-        if self._dlg:
-            (keepGoing, foo) = self._dlg.Update(int(percent), "download status: %d%%" % percent)
-            return keepGoing
-        else:
-            return True
-
-
-    def _download_in_chunks(self, response, chunk_size=250000):
-        """retrieve download file in small bits and report progress"""
-        bytes_so_far = 0
-        data = ""
-        keepGoing = True
-
-        while keepGoing:
-            chunk = response.read(chunk_size)
-            if not chunk:
-                break
-            bytes_so_far += len(chunk)
-            data += chunk
-            self._log.debug("downloaded %d of %d bytes" % (bytes_so_far, self._content_length))
-            keepGoing = self.update_dialog(bytes_so_far)
-        
-        ## finally return data
-        return data
-
-
-    def download(self):
-        """start incremental download; return data and expected size"""
-        self._log.info("downloading from '%s'" % self._url)
-        try:
-            response = urllib2.urlopen(self._url)
-            content_length = response.info().getheader('Content-Length').strip()
-            self._content_length = int(content_length)
-        except Exception, err:
-            self._log.exception(err)
-            self.error = err
-            return (None, -1)
-        
-        ## set up incremental download
-        chunk_size = 250000
-        self._log.info("incremental download of %d bytes (chunksize=%d)" %
-                (self._content_length, chunk_size))
-        data = self._download_in_chunks(response, chunk_size)
-        self._log.info("-> retreived %d bytes" % len(data))
-        if len(data) != self._content_length:
-            self._log.error("wrong download size: %d vs %d bytes" % (len(data), self._content_length))
-
-        ## return data and expected size 
-        return (data, self._content_length) 
-
-
-
-
-
-
-
-
-class DownloadParser(HTMLParser):
-    """parses the project's wxfalsecolor.exe download site"""
-
-    def __init__(self, dfmt, logger=None):
-        """create new instance with optional data format and logger instance""" 
-        HTMLParser.__init__(self)
-        self._log = logger if logger else DummyLogger()
-
-        ## keep context state
-        self._box_inner = False
-        self._pagetitle = False
-        self._tableheader = False
-        self._expect_date = False
-        self._expectDownload = False
-        self._expect_description = False
-
-        ## the things we need to find in page
-        self.downloadLink = None
-        self.filesize = None
-        self.filename = "wxfalsecolor.exe"
-        self.uploadedDate = None
-        self.struct_time = None
-        self.description = None
-        self.version = None
-
-        self.setFormat(dfmt)
-
-
-    def _getDateFromAttributes(self, attrs):
-        """extract the uploaded time stamp from 'title' attribute"""
-        ## set old date as default
-        datestamp = "Thu Jan 1 00:00:00: 2000"
-        for k,v in attrs:
-            if k == "title":
-                datestamp = v
-                self._log.info("found datestamp: '%s'" % datestamp)
-        try:
-            ## format: Thu Jan 13 12:29:20 2011
-            self.struct_time = time.strptime(datestamp, self._dateFormat)
-            self.uploadedDate = datestamp
-        except ValueError:
-            self.warn("datestamp '%s' does not match format '%s'" % (datestamp, self._dateFormat))
-            pass
-        self._expect_date = False
-   
-
-    def getDetailsDict(self):
-        """return dict with download details"""
-        return {'url' :         self.downloadLink,
-                'description' : self.description,
-                'date' :        self.uploadedDate,
-                'struct_time' : self.struct_time,
-                'version' :     self.version,
-                'filesize' :    self.filesize,
-                'filename' :    self.filename}
-   
-
-    def _getVersionFromTitle(self, data):
-        """extract version number from page title (upload summary)"""
-        words = data.split()
-        if "version" in words:
-            version = words[words.index("version")+1]
-            try:
-                self.version = float(version)
-                self._log.info("found version number: %s" % version)
-            except:
-                pass
-
-
-    def handle_starttag(self, tag, attrs):
-        """set attributes depending on html context"""
-        
-        ## summary (for version) is part of the title
-        if tag == "title":
-            self._pagetitle = True
-        
-        ## description is in <pre> tag
-        elif tag == "pre":
-            self._in_pre = True
-        
-        ## div for download link and file size 
-        elif tag == "div":
-            for k,v in attrs:
-                if k == "class" and v == "box-inner":
-                    self._box_inner = True
-        
-        ## important fields are preceeded by <th>
-        elif tag == "th":
-            self._tableheader = True
-
-        ## upload date is the 'title' attribute of a <span>
-        elif tag == "span" and self._expect_date:
-            self._getDateFromAttributes(attrs)
-            
-        ## download links
-        elif tag == "a" and self._box_inner:
-            for k,v in attrs:
-                if k == "href":
-                    self.downloadLink = v
-                    self._expectDownload = False
-
-
-    def handle_endtag(self, tag):
-        """reset context attributes"""
-        if tag == "th":
-            self._tableheader = False
-        elif tag == "title":
-            self._pagetitle = False
-        elif tag == "pre":
-            self._in_pre = False
-        elif tag == "span":
-            self._expect_date = False
-        elif tag == "div":
-            if self._box_inner:
-                self._box_inner = False
-
-
-    def handle_data(self, data):
-        """process text information"""
-
-        ## skip layout only tags (plenty of those)
-        data = data.strip()
-        if data == "":
-            return
-        
-        ## file size from main download box
-        if self._box_inner == True:
-            if data.endswith("exe"):
-                self.filename = data
-            else:
-                self.filesize = data
-        
-        ## set next attribute based on header text
-        if self._tableheader:
-            if data == "Uploaded:":
-                self._expect_date = True
-            elif data == "Description:":
-                self._expect_description = True
-            elif data == "File:":
-                self._expectDownload = True
-        
-        ## check length of data to find download description
-        elif self._expect_description and self._in_pre:
-            self.description = data
-            self._log.info("found download description (%d bytes)" % len(data))
-            self._expect_description = False
-        
-        elif self._pagetitle:
-            self._getVersionFromTitle(data)
-
-
-    def hasData(self):
-        """return True if all info fields were found"""
-        if self.downloadLink == None:
-            self._log.info("download link is not available")
-            return False
-        if self.uploadedDate == None:
-            self._log.info("uploaded date is not available")
-            return False
-        return True
-
-
-    def isUpdate(self, testdate):
-        """return True if testdate is older than upload date"""
-        if not self.hasData():
-            return False
-        if type(testdate) == type(""):
-            self._log.debug("converting string '%s' to struct_time" % testdate)
-            testdate = time.strptime(testdate, self._dateFormat)
-        if isinstance(testdate, time.struct_time):
-            return testdate < self.struct_time
-       
-
-    def setFormat(self, format):
-        """set format to use to parse date string"""
-        self._dateFormat = format 
-        self._log.info("set date format to '%s'" % self._dateFormat)
-
-
-
-
-
 
 class UpdateDetailsDialog(wx.Dialog):
     """this dialog shows details of the available update"""
@@ -305,7 +47,7 @@ class UpdateDetailsDialog(wx.Dialog):
         sizer.Fit(self) 
     
     
-    def description_panel(self, text, width=350):
+    def _description_panel(self, text, width=350):
         """return scrolled panel for description text"""
         scr_panel = scrolled.ScrolledPanel(self, wx.ID_ANY, size=(width,200))
         scr_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -323,17 +65,17 @@ class UpdateDetailsDialog(wx.Dialog):
         
         ## title
         label = wx.StaticText(self, -1,
-		"Update available for %s" % details.get("filename", "wxfalsecolor.exe"))
+        "Update available for %s" % details.get("filename", "wxfalsecolor.exe"))
         font_dflt = label.GetFont()
         font_big = wx.Font(font_dflt.GetPointSize()+2,
                 font_dflt.GetFamily(),
                 font_dflt.GetStyle(),
-               L, wx.BOLD)
+                wx.BOLD)
         label.SetFont(font_big)
         sizer.Add(label, 0, wx.ALIGN_CENTRE|wx.ALL, 15)
         
         ## grid of title - value fields
-        self._layout_labels(sizer, details, font_dflt15)
+        self._layout_labels(sizer, details, font_dflt)
         
         ## divider
         line = wx.StaticLine(self, -1, size=(20,-1), style=wx.LI_HORIZONTAL)
@@ -371,128 +113,246 @@ class UpdateDetailsDialog(wx.Dialog):
             box = wx.BoxSizer(wx.HORIZONTAL)
             label1 = wx.StaticText(self, wx.ID_ANY, header, size=(85,-1))
             label1.SetFont(font_bold)
-            box.Add(label1, 0, wx.ALIGTOP|wx.ALL, 5)
+            box.Add(label1, 0, wx.ALIGN_TOP|wx.ALL, 5)
+
             if header != "description:":
                 label2 = wx.StaticText(self, wx.ID_ANY, str(value), size=(150,-1))
                 box.Add(label2, 1, wx.ALIGN_TOP|wx.ALL, 5)
             else:
                 text = details.get('description', "no description available")
-                box.Add(self._description_panel(text, 350), 1, wx.ALIGN_TOPRE|wx.ALL, 5)
+                box.Add(self._description_panel(text, 350), 1, wx.ALIGN_TOP|wx.ALL, 5)
             sizer.Add(box, 0, wx.GROW|wx.ALIGN_CENTER_VERTICAL|wx.LEFT|wx.RIGHT, 10)
+
+
+
+
+
+class Release(object):
+
+    def __init__(self, dict):
+        """wrapper for JSON release object to implement comparison operator"""
+        self._release = dict
+
+    @property
+    def assets(self):
+        return self._release['assets']
+
+    @property
+    def body(self):
+        return self._release['body']
+
+    @property
+    def created_at(self):
+        return self._release['created_at']
+
+    @property
+    def draft(self):
+        return self._release['draft']
+
+    @property
+    def prerelease(self):
+        return self._release['prerelease']
+
+    @property
+    def version(self):
+        t = self._release['tag_name']
+        v = t[1:] if t.startswith("v") else t
+        return StrictVersion(v)
+    
+    def __eq__(self, other):
+        return self.version == other.version
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __gt__(self, other):
+        return self.version > other.version
+
+    def __lt__(self, other):
+        return self.version < other.version
+
+    def __ge__(self, other):
+        return (self > other) or (self == other)
+
+    def __le__(self, other):
+        return (self < other) or (self == other) 
+
 
 
 
 
 class UpdateManager(object):
 
-    def __init__(self, url, date=None, format=None, logger=None):
+    def __init__(self, url="", logger=None):
         """create new instance of UpdateManager for url"""  
+        
         self._log = logger if logger else DummyLogger()
-        
-        self.date = None
         self.error = None
-        self.format = format if format else "%a %b %d %H:%M:%S %Y"
-        self._parser = DownloadParser(self.format, logger=self._log)
         self.parent = None
-        self.url = url
-        self.text = ""
+        self.url = ""
+        self.releases = []
+        self._updates = []
 
-        if date:
-            self.setDate()
+        if url:
+            self.get_releases(url)
+
+
+    def _version(self, tag_name):
+        """remove leading 'v' from tag_name"""
+        return tag_name[1:] if tag_name.startswith("v") else tag_name
+
+
+    def find_updates(self, versionstring, include_prerelease=False):
+        """filter list of releases by draft, prerelease and version tag"""
+
+        self._log.info("check for updates ...")
+        self._log.debug("-> current version='%s'" % versionstring)
+        self._log.debug("-> url='%s'" % self.url)
         
+        releases = [Release(r) for r in self.releases if r["assets"]] 
+        releases = [r for r in releases if r.draft == False]
+        if not include_prerelease:
+            releases = [r for r in releases if r.prerelease == False]
 
-    def getDownloadPage(self):
-        """try to retrieve wxfalsecolor.exe download page"""
+        self._updates = [r for r in releases if r.version > StrictVersion(self._version(versionstring))]
+        self._updates.sort()
+        self._log.debug("-> found %d updates" % len(self._updates))
+
+
+    def get_releases(self, url):
+        """return list of releases retreived from GitHub api"""
+        self.releases = []
+        self.url = ""
         try:
-            page = urllib2.urlopen(self.url)
-            self.text = page.read()
-            self._log.debug("urlopen() read %d bytes from '%s'" % (len(self.text), self.url))
-            page.close()
-            return True
-        except urllib2.HTTPError, err:
-            self.error = str(err)
-            self._log.error("urlopen() failedServer responded with error code %d" % err.code)
-            return False
-        except urllib2.URLError, err:
-            self.error = "URLError: %s" % str(err.reason)
-            self._log.error("urlopen() failed: '%s'" % str(err.reason))
-            return False
+            response = requests.get(url, verify=False)
+            response.raise_for_status()
+            if response.status_code == 200:
+                self.releases = json.loads(response.text)
+                self.url = url
 
-
-    def parseText(self, text=""):
-        """process contents of html page"""
-        if text == "":
-            text = self.text
-        self._log.info("parsing text (%d bytes" % len(self.text))
-        self._parser.feed(text)
-        self._parser.close()
-
+        except requests.exceptions.RequestException as e:  
+            self.error = e
+            
 
     def getDownloadDetails(self):
-        """return download details as dict""" 
-        if not self._parser.hasData():
-            self._log.warning("parser has no data")
+        """return download details as dict"""
+
+        if self._updates == []:
+            self._log.info("no updates found")
             return {}
-        else:
-            return self._parser.getDetailsDict()
+
+        update = self._updates[-1]
+        asset = update.assets[0]
+        return {'url':         asset['browser_download_url'],
+                'description': update.body,
+                'date':        update.created_at,
+                'version':     "%s" % update.version,
+                'filesize':    round(asset['size']/(1024*1024.0), 2),
+                'filename':    asset['name']}
 
 
-    def logDetails(self):
+    def log_details(self):
         """write details of update out to debug log"""
-        for k,v in self._parser.getDetailsDict().items():
+        for k,v in self.getDownloadDetails().items():
             self._log.debug("> %11s : %s" % (k, str(v)[:50]))
 
 
-    def showDetails(self):
+    def print_details(self):
         """print contents of details dict"""
-        for k,v in self._parser.getDetailsDict().items():
+        for k,v in self.getDownloadDetails().items():
             print "%11s : %s" % (k, str(v)[:60])
         
+            
+    def saveData(self, data, path):
+        """write downloaded data out to file"""
+        self._log.info("saving data to file '%s' (%d bytes)" % (path, len(data)))
+        try:
+            with open(path, 'wb') as f:
+                f.write(data)
+            return True
+        except Exception, err:
+            self.error = str(err)
+            if self.parent:
+                self._showErrorDialog(self, "Error saving file!")
+            else:
+                self._log.error("Error saving file! - '%s'" % self.error.args[0])
+
 
     def showDialog(self, parent):
         """show dialog according to update availability"""
         self.parent = parent
         available = self.updateAvailable()
-        if available == True:
-            self._log.info("update is available")
-            self.logDetails()
-            details = self.getDownloadDetails()
-            return self._showDetailsDialog(details)
-        elif self.error:
+        
+        if self.error:
             self._showErrorDialog()
             return False
+
+        elif self.updateAvailable():
+            self._log.info("update is available")
+            self.log_details()
+            self._showUpdateDialogs()
+
         else:
             self._log.info("no update available")
             self._showInfoDialog("no update", "No new updates available.\nTry again in a few weeks.")
             return True
 
 
+    def _showUpdateDialogs(self):
+        """show dialogs to show update, filepath selector and download progress"""
+
+        details = self.getDownloadDetails()
+        do_download = self._showDetailsDialog(details)
+        if not do_download:
+            return
+
+        path = self._showFileSelector(details)
+        if not path:
+            return
+
+        data = self._startDownload(details)
+        if self.error:
+            self._showErrorDialog()
+            return
+
+        if not data:
+            return
+
+        success = self.saveData(data, path)
+        if success:
+            self._showInfoDialog("Download completed.", 
+                    "Enjoy the new version.\nfilepath: '%s'" % path)
+
+
     def _showDetailsDialog(self, details):
         """show dialog with details of the download file"""
+
         dlg = UpdateDetailsDialog(self.parent, details)
         dlg.CenterOnScreen()
         val = dlg.ShowModal()
         if val == wx.ID_OK:
             self._log.debug("update accepted; showing file selector ...")
-            return self.showFileSelector(details)
+            return True
         else:
             self._log.info("update skipped; no download")
-            return True
+            return False
 
 
-    def _showErrorDialog(self, title="Error during update!"):
+    def _showErrorDialog(self, title="Error during update!", info=""):
         """show error message dialog"""
-        self._log.error("error message: '%s'" % " ".join(self.error.split()))
-        dlg = wx.MessageDialog(self.parent,
-            "error message:\n%s" % self.error,
-            title, 
-            wx.OK|wx.ICON_ERROR)
+        
+        msg = info if info != "" else self.error
+        self._log.error( "error message: '%s'" % " ".join(msg.split()) )
+        msg = "error message:\n%s" % msg
+
+        dlg = wx.MessageDialog(self.parent, msg, title, wx.OK|wx.ICON_ERROR)
         dlg.ShowModal()
         dlg.Destroy()
     
 
-    def showFileSelector(self, details):
+    def _showFileSelector(self, details):
         """on download show a file selector to save data to"""
+        
         filedialog = wx.FileDialog(self.parent,
                           message = 'save download',
                           defaultDir = os.getcwd(),
@@ -501,44 +361,32 @@ class UpdateManager(object):
         
         if filedialog.ShowModal() != wx.ID_OK:
             self._log.info("change of mind: no file path chosen")
-            return True
+            return False
         
         ## start download with selected path
         path = filedialog.GetPath()
         self._log.debug("selected file name: '%s'" % path)
-        self.startDownload(path, details)
-        if self.error:
-            self._showErrorDialog()
-            return False
-
-        ## if everything went well show good-bye message
-        self._showInfoDialog("Download completed.", 
-                "Enjoy the new version.\nfilepath: '%s'" % path)
-        return True
+        return path
 
     
     def _showInfoDialog(self, title="title line", info="info line"):
         """show info message dialog"""
+        
         logmsg = "%s - %s" % (title, info)
         logmsg = " ".join(logmsg.split())
         self._log.info(logmsg)
-        dlg = wx.MessageDialog(self.parent,
-                info,
-                title, 
-                wx.OK|wx.ICON_INFORMATION)
+
+        dlg = wx.MessageDialog(self.parent, info, title, wx.OK|wx.ICON_INFORMATION)
         dlg.ShowModal()
         dlg.Destroy()
-    
 
-    def startDownload(self, path, details):
+
+    def _startDownload(self, details):
         """illustrate download with progress bar dialog"""
-
+        
         filename = details.get("filename", "UNKNOWN")
-        self._log.info("download of '%s' to file '%s'" % (filename,path))
         url = details.get('url')
-        if not url:
-            self._log.error("no url for download")
-            return False
+        self._log.debug("beginning download of '%s'" % url)
         
         ## create progress dialog window
         dlg = wx.ProgressDialog("downloading file '%s'" % filename,
@@ -547,73 +395,65 @@ class UpdateManager(object):
                 parent = self.parent,
                 style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME)
         
-        incr = IncrementalDownloader(url, dlg, logger=self._log)
-        data, size = incr.download()
+        data, content_length = self._download(url, dlg)
         dlg.Destroy()
 
-        if data and len(data) == size:
-            return self.saveData(data, path)
-
-        elif data and len(data) != size:
-            self.error = "download file incomplete"
-            _showErrorDialog(self,
-                    title="Error during download!",
-                    info="Download file is incomplete.\nPlease try again another time.")
-            return False
-        
-        else:
-            self.error = incr.error.args[0] if incr.error else "Download failed."
-            _showErrorDialog(self,
-                    title="Download error!",
-                    info="Download file could not be retrieved.\nPlease try again with debugging enabled to see more details.")
-            return False
-            
-
-    def saveData(self, data, path):
-        """write downloaded data out to file"""
-        self._log.info("saving data to file '%s' (%d bytes)" % (path, len(data)))
-        try:
-            f = file(path, "wb")
-            f.write(data)
-            f.close()
-            return True
-        except Exception, err:
-            self.error = str(err)
-            if self.parent:
-                self._showErrorDialog(self, "Error saving file!")
-            else:
-                self._log.error("Error saving file! - '%s'" % self.error.args[0])
-    
-
-    def setDateFormat(self, format):
-        """set new format for date parsing"""
-        self.format = format
-        self._parser.setFormat(format)
-
-
-    def setDate(self, date):
-        """set new date to check"""
-        try: 
-            testdate = time.strptime(date, self.format)
-            self.date = date
-            return True
-        except ValueError, err:
-            self._log.error("error setting date: '%s'" % err.args[0])
+        if content_length == -1:
+            ## download interruped by user
+            self._log.info("download canceled by user")
             return False
 
-
-    def updateAvailable(self, date=None):
-        """check if uploaded date is newer than release date"""
         if self.error:
             return False
-        if date:
-            if self.setDate(date) == False:
-                self._log.error("could not check date string '%s' against update date")
-                return False
-        if self.text == "":
-            self.getDownloadPage()
-            self.parseText()
-        return self._parser.isUpdate(self.date)
+
+        if len(data) != content_length:
+            self._log.warning("download incomplete: retrieved=%d  - expected=%d" % (len(data), content_length))
+            return False
+
+        self._log.info("download complete")
+        return data
 
 
+    def _download(self, url, dlg):
+        """download data and update ProgressDialog; return data and expected length"""
+
+        try:
+            r = requests.get(url, stream=True, verify=False)
+            content_length = int(r.headers['content-length'])
+            current_length = 0
+        except requests.exceptions.RequestException as e:
+            self.error = e
+            return (None, 0)
+
+        io = cStringIO.StringIO()
+        for chunk in r.iter_content(chunk_size=1024*128): 
+            if chunk: # filter out keep-alive new chunks
+
+                io.write(chunk)
+
+                current_length += len(chunk)
+                percent = float(current_length) / content_length
+                percent = round(percent*100, 2)
+                
+                (keepGoing, foo) = dlg.Update(int(percent), "download status: %d%%" % percent)
+                
+                ## close dialog and IO memory file
+                if keepGoing == False:
+                    dlg.Destroy()
+                    io.close()
+                    return (None,-1)
+
+        ## close dialog and IO return data and expected length of data
+        data = io.getvalue()
+        io.close()
+        return (data, content_length)
+
+
+    def updateAvailable(self):
+        """check if uploaded """
+        if self.error:
+            return False
+        if not self._updates:
+            return False
+        return True
 

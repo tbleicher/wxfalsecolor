@@ -1,159 +1,183 @@
-from updatemanager import *
+import unittest
 import mock
-import urllib2
+import json
+
+from requests.exceptions import RequestException
+from updatemanager import *
+
+import requests_mock
+
+GITHUB_URL = "https://api.github.com/repos/tbleicher/wxfalsecolor/releases"
+
+TEST_RELEASES = [
+    {'assets': [{'browser_download_url': 'https://github.com/tbleicher/wxfalsecolor/releases/download/v0.51/wxfalsecolor_v0.51.exe',
+               'created_at': '2015-05-09T15:40:44Z',
+               'label': None,
+               'name': 'wxfalsecolor_v0.51.exe',
+               'size': 5741460,
+               'updated_at': '2015-05-09T15:42:16Z',
+               'uploader': {},
+               'url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/releases/assets/571667'}],
+    'assets_url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/releases/1278186/assets',
+    'author': {},
+    'body': 'This is the old code from code.google.com. Minor typos and transfer bugs fixed, no new features.\r\n\r\nThis release is provided as a migration aid to offer a download location for the latest working version of the code and binary. The Windows binary was built on Windows XP using versions of Python and wxPython that were current at the time (December 2012). ',
+    'created_at': '2015-03-29T16:22:00Z',
+    'draft': False,
+    'html_url': 'https://github.com/tbleicher/wxfalsecolor/releases/tag/v0.51',
+    'name': 'wxfalsecolor version 0.51 [December 2012]',
+    'prerelease': False,
+    'published_at': '2015-05-09T15:42:29Z',
+    'tag_name': 'v0.51',
+    'url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/releases/1278186',
+    'zipball_url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/zipball/v0.51'},
+
+    {'assets': [{'browser_download_url': 'https://github.com/tbleicher/wxfalsecolor/releases/download/v0.52/wxfalsecolor_v0.52.exe',
+               'created_at': '2015-06-09T15:40:44Z',
+               'label': None,
+               'name': 'wxfalsecolor_v0.52.exe',
+               'size': 5741460,
+               'updated_at': '2015-06-09T15:42:16Z',
+               'uploader': {},
+               'url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/releases/assets/571667'}],
+    'assets_url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/releases/1278186/assets',
+    'author': {},
+    'body': 'Future release. ',
+    'created_at': '2015-05-29T16:22:00Z',
+    'draft': False,
+    'html_url': 'https://github.com/tbleicher/wxfalsecolor/releases/tag/v0.52',
+    'name': 'wxfalsecolor version 0.52 [June 2015]',
+    'prerelease': False,
+    'published_at': '2015-06-09T15:42:29Z',
+    'tag_name': 'v0.52',
+    'url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/releases/1278186',
+    'zipball_url': 'https://api.github.com/repos/tbleicher/wxfalsecolor/zipball/v0.52'},
+
+    {'assets': [{'foo': 'bar'}],
+    'body': 'ignored because draft status',
+    'name': 'wxfalsecolor version 0.52a1 (prerelease)',
+    'tag_name': 'v0.52a1',
+    'prerelease': False,
+    'draft': True},
+
+    {'assets': [{'foo': 'bar'}],
+    'body': 'ignored because prerelease status',
+    'name': 'wxfalsecolor version 0.52a2 (prerelease)',
+    'tag_name': 'v0.52a2',
+    'prerelease': True,
+    'draft': False},
+
+    {'assets': [{'foo': 'bar'}],
+    'body': 'ignored because old version',
+    'name': 'wxfalsecolor version 0.50',
+    'tag_name': 'v0.50',
+    'prerelease': False,
+    'draft': False}
+]
 
 
-URL_TESTFILE = "./tests/data/code.google.html"
+class TestRelease(unittest.TestCase):
 
-URL_WXFC_04_ALPHA = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor_v04alpha.exe"
+    def test_draft(self):
+        r = Release({"draft": False})
+        self.assertFalse(r.draft)
+        r = Release({"draft": True})
+        self.assertTrue(r.draft)
 
+    def test_prerelease(self):
+        r = Release({"prerelease": False})
+        self.assertFalse(r.prerelease)
+        r = Release({"prerelease": True})
+        self.assertTrue(r.prerelease)
 
-
-class TestDownloadParser:
-
-    def __init__(self):
-        self._parser = self._newParser()
-
-    def _newParser(self):
-        text = file(URL_TESTFILE, "r").read()
-        parser = DownloadParser("%a %b %d %H:%M:%S %Y")
-        parser.feed(text)
-        parser.close()
-        return parser
-
-    def test_hasData(self):
-        assert self._parser.hasData() == True
-
-    def test_isUpdate_same_day(self):
-        assert self._parser.isUpdate("Thu Jan 13 12:29:20 2011") == False
-
-    def test_isUpdate_next_day(self):
-        assert self._parser.isUpdate("Fri Jan 14 12:29:20 2011") == False
-
-    def test_isUpdate_previous_day(self):
-        assert self._parser.isUpdate("Wed Jan 12 12:29:20 2011") == True
-
-
-
-class TestUpdateManager:
-
-    def __init__(self):
-        if os.name == 'nt':
-            self.fileurl = "file:///%s" % os.path.abspath(URL_TESTFILE)
-        else:
-            self.fileurl = "file://%s" % os.path.abspath(URL_TESTFILE)
-
-    def test_same_day(self):
-        um = UpdateManager(self.fileurl)
-        um.setDate("Thu Jan 13 12:29:20 2011")
-        assert um.updateAvailable() == False
-
-    def test_next_day(self):
-        um = UpdateManager(self.fileurl)
-        um.setDate("Fri Jan 14 12:29:20 2011")
-        assert um.updateAvailable() == False
-
-    def test_previous_day(self):
-        um = UpdateManager(self.fileurl)
-        um.setDate("Wed Jan 12 12:29:20 2011")
-        assert um.updateAvailable() == True
-
-    def test_remote_site(self):
-        um = UpdateManager(URL_WXFC_04_ALPHA)
-        ## date of 0.4alpha is Jul 20 2010
-        um.setDate("Wed Jul 20 12:00:00 2010")
-        assert um.updateAvailable() == True
-
-    def test_getDownloadPage_success(self):
-        um = UpdateManager(self.fileurl)
-        assert um.getDownloadPage() == True
-        assert um.text == file(URL_TESTFILE).read()
-
-    @mock.patch("urllib2.urlopen") 
-    def test_getDownloadPage_HTTPError(self, urlopen):
-        urlopen.side_effect = urllib2.HTTPError(self.fileurl, 404, "test", {}, file(URL_TESTFILE))
-        um = UpdateManager(self.fileurl)
-        assert um.getDownloadPage() == False
-        assert um.text == ""
+    def test_equal(self):
+        r1 = Release({"tag_name": "1.1"})
+        r2 = Release({"tag_name": "1.1.0"})
+        self.assertEqual(r1, r2)
     
-    @mock.patch("urllib2.urlopen") 
-    def test_getDownloadPage_URLError(self, urlopen):
-        urlopen.side_effect = urllib2.URLError((404, "test"))
-        um = UpdateManager(self.fileurl)
-        assert um.getDownloadPage() == False
-        assert um.text == ""
-       
+    def test_less_than(self):
+        r1 = Release({"tag_name": "1.1"})
+        r2 = Release({"tag_name": "1.1.1"})
+        self.assertTrue(r1 < r2)
+
+    def test_less_than_alpha(self):
+        r1 = Release({"tag_name": "1.1a1"})
+        r2 = Release({"tag_name": "1.1"})
+        self.assertTrue(r1 < r2)
+
+    def test_greater_than(self):
+        r1 = Release({"tag_name": "1.1.1"})
+        r2 = Release({"tag_name": "1.1.0"})
+        self.assertTrue(r1 > r2)
+
+    def test_greater_than_alpha(self):
+        r1 = Release({"tag_name": "1.1a1"})
+        r2 = Release({"tag_name": "1.2"})
+        self.assertTrue(r1 < r2)
 
 
 
-class wxUpdaterTestFrame(wx.Frame):
+class TestUpdateManager(unittest.TestCase):
 
-    def __init__(self, parent=None, id=-1, title="updater test frame"):
-        self._log = get_logger()
-        self.fileurl = "file://%s" % os.path.abspath(URL_TESTFILE)
-        wx.Frame.__init__(self, parent, id, title, size=wx.Size(150,150))
-        self.Show()
+    def setUp(self):
+        self.um = UpdateManager()
+        self.um.releases = TEST_RELEASES
 
-        ## 'no update' button
-        noupdate = wx.Button(self, wx.ID_ANY, 'no update', (20,10) )
-        noupdate.Bind(wx.EVT_LEFT_DOWN, self.onNoUpdate)
-        
-        ## 'update' button
-        updateb = wx.Button(self, -1, 'update', (20,40) )
-        updateb.Bind(wx.EVT_LEFT_DOWN, self.onUpdate)
-        
-        ## 'update error' button
-        update_err = wx.Button(self, -1, 'update error', (20,70) )
-        update_err.Bind(wx.EVT_LEFT_DOWN, self.onUpdateError)
-        
-        ## 'quit' button
-        quitbutton = wx.Button(self, wx.ID_EXIT, 'quit', (20,100) )
-        quitbutton.Bind(wx.EVT_LEFT_DOWN, self.onQuit)
+    @requests_mock.Mocker()
+    def test_get_releases(self, m):
+        m.get(GITHUB_URL, text=json.dumps(['a','b']), status_code=200)
+        self.um.get_releases(GITHUB_URL)
+        self.assertEqual(self.um.releases, ['a','b'])
+        self.assertEqual(self.um.url, GITHUB_URL)
 
-    def onNoUpdate(self, evt):
-        self._log.info("starting update (no update) url='%s'" % URL_TESTFILE)
-        um = UpdateManager(self.fileurl)
-        um.setDate("Fri Jan 14 12:29:20 2011")
-        um.showDialog(self)
-    
-    def onUpdate(self, evt):
-        self._log.info("starting update url='%s'" % URL_WXFC_04_ALPHA)
-        um = UpdateManager(URL_WXFC_04_ALPHA)
-        um.setDate("Tue Jul 20 12:00:00 2010")
-        um.showDetails() 
-        um.showDialog(self)
-        self.Close()
+    @requests_mock.Mocker()
+    def test_get_releases_with_wrong_http_status(self, m):
+        m.get(GITHUB_URL, text=json.dumps({'message': 'Not Found'}), status_code=404)
+        self.um.get_releases(GITHUB_URL)
+        self.assertEqual(self.um.releases, [])
+        self.assertEqual(self.um.url, "")
 
-    def onUpdateError(self, evt):
-        fileurl = "file://%s" % os.path.abspath(URL_TESTFILE)
-        um = UpdateManager(self.fileurl+"foo")
-        um.setDate("Thu Jan 13 12:29:20 2011")
-        um.showDialog(self)
-        
-    def onQuit(self, evt):
-        self.Close()
+    @mock.patch('requests.get', mock.Mock(side_effect=RequestException))
+    def test_get_releases_with_exception(self):
+        self.um.get_releases(GITHUB_URL)
+        self.assertTrue(self.um.error)
+        self.assertEqual(self.um.releases, [])
+        self.assertEqual(self.um.url, "")
 
+    def test_version(self):
+        self.assertEqual(self.um._version("v0.51"), "0.51")
+        self.assertEqual(self.um._version("0.51"), "0.51")
 
+    def test_number_of_releases(self):
+        self.assertEqual(len(self.um.releases), 5)
 
+    def test_find_updates(self):
+        self.um.find_updates("v0.0")
+        self.assertEqual(len(self.um._updates), 3)
+        self.um.find_updates("v0.50")
+        self.assertEqual(len(self.um._updates), 2)
 
-def get_logger():
-    import logging
-    log = logging.getLogger(logname)
-    log.setLevel(logging.DEBUG)
-    format = logging.Formatter("[%(levelname)1.1s] %(name)s %(module)s : %(message)s")
-    log_handler = logging.StreamHandler() 
-    log_handler.setLevel(logging.DEBUG)
-    log_handler.setFormatter(format)
-    log.addHandler(self._logHandler)
-    return log
+    def test_find_updates_include_prerelease(self):
+        self.um.find_updates("v0.0", include_prerelease=True)
+        self.assertEqual(len(self.um._updates), 4)
+
+    def test_updates_sorted(self):
+        self.um.find_updates("v0.0")
+        self.assertEqual(len(self.um._updates), 3)
+        self.assertEqual( StrictVersion("0.50"), self.um._updates[0].version)
+        self.assertEqual( StrictVersion("0.52"), self.um._updates[2].version)
+
+    def test_update_available(self):
+        self.um.find_updates("v0.0")
+        self.assertTrue(self.um.updateAvailable())
+        self.um.find_updates("v0.52")
+        self.assertFalse(self.um.updateAvailable())
+        self.um.error = "test error"
+        self.assertFalse(self.um.updateAvailable())
+
 
 
 if __name__ == '__main__':
-    app = wx.App(redirect = False)
-    frame = wxUpdaterTestFrame()
-    frame.onUpdate(-1)
-    app.MainLoop()
-
+  unittest.main()
 
 
 

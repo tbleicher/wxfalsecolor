@@ -5,10 +5,10 @@
 ## $Id$
 ## $URL$
 
-VERSION=0.51
-RELEASE_DATE = "Thu Dec 13 23:30:20 2012"
+VERSION="v0.52"
+RELEASE_DATE = "June 13, 2015"
 
-LICENSE="""Copyright 2010 Thomas Bleicher. All rights reserved.
+LICENSE="""Copyright 2015 Thomas Bleicher. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -62,6 +62,10 @@ from rad_utils import beautyscale
 from resizedialog import ResizeDialog
 
 DATE_FORMAT = "%a %b %d %H:%M:%S %Y"
+
+## remove InsecureRequestWarning from console stream
+logging.captureWarnings(True)
+
 
 
 class HeaderDialog(wx.Frame):
@@ -193,12 +197,12 @@ class WxfcApp(wx.App, InterfaceBase):
             self._log.debug("automatic update checks disabled")
             return
         
-        ## get time of last update check
+        ## get time of last update check 
         if self._config.has_option("Update", "last_check_date"):
             last_string = self._config.get("Update", "last_check_date")
         else:
             self._log.debug("no time stamp for last update check found")
-            last_string = time.strftime(DATE_FORMAT)
+            last_string = time.strftime(DATE_FORMAT, time.localtime(0))
             self._config.set("Update", "last_check_date", last_string)
 
         ## convert date stamp to seconds
@@ -208,7 +212,7 @@ class WxfcApp(wx.App, InterfaceBase):
             self._log.error("error parsing last update check date ('%s'): '%s'" % 
                 (date_string, err.args[0]))
             self._config.set("Update", "last_check_date", time.strftime(DATE_FORMAT))
-            return False
+            last_check = 0
         
         ## check for updates if last update was too long ago
         next_check = last_check + (interval*24*60*60)
@@ -217,22 +221,21 @@ class WxfcApp(wx.App, InterfaceBase):
             self.check_for_update()
         else:
             days = (next_check-time.time()) / (24*60*60)
-            self._log.debug("next update in %d days" % days)
+            self._log.debug("next update check in %d days" % days)
         
 
     def check_for_update(self, event=None):
         """start UpdateManager to check google project page for update"""
-        UPDATE_URL = "http://code.google.com/p/pyrat/downloads/detail?name=wxfalsecolor.exe"
-        self._log.info("check for updates ...")
-        self._log.debug("-> version='%.2f'" % VERSION)
-        self._log.debug("-> date='%s'" % RELEASE_DATE)
-        self._log.debug("-> url='%s'" % UPDATE_URL)
+        
+        UPDATE_URL = "https://api.github.com/repos/tbleicher/wxfalsecolor/releases"
         um = UpdateManager(UPDATE_URL, logger=self._log)
-        um.setDate(RELEASE_DATE)
+        um.find_updates(VERSION)
+
+        ## show dialog on manual check (event) or when updates are available
         if event or um.updateAvailable():
-            if um.showDialog(self.main) == True:
-                ## update was successful or skipped by user
-                self._config.set("Update", "last_check_date", time.strftime(DATE_FORMAT))
+            um.showDialog(self.main)
+            ## record current date for next check
+            self._config.set("Update", "last_check_date", time.strftime(DATE_FORMAT))
 
 
     def exit(self, error=None):
@@ -658,10 +661,10 @@ class WxfcFrame(wx.Frame):
         """show dialog with license etc"""
         info = wx.AboutDialogInfo()
         info.Name = "wxfalsecolor"
-        info.Version = "v%.2f (rREV)" % VERSION  # placeholder for build script 
-        info.Copyright = "(c) 2010 Thomas Bleicher"
+        info.Version = "%s" % VERSION
+        info.Copyright = "(c) 2015 Thomas Bleicher"
         info.Description = "cross-platform GUI frontend for falsecolor"
-        info.WebSite = ("http://sites.google.com/site/tbleicher/radiance/wxfalsecolor", "wxfalsecolor home page")
+        info.WebSite = ("http://tbleicher.github.io/wxfalsecolor/", "wxfalsecolor home page")
         info.Developers = ["Thomas Bleicher", "Axel Jacobs"]
         lines = [" ".join(line.split()) for line in LICENSE.split("\n\n")]
         info.License = wordwrap("\n\n".join(lines), 500, wx.ClientDC(self))
