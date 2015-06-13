@@ -393,7 +393,7 @@ class UpdateManager(object):
                 "download status: 0%",
                 maximum = 101,
                 parent = self.parent,
-                style = wx.PD_APP_MODAL|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME)
+                style = wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT|wx.PD_ELAPSED_TIME)
         
         data, content_length = self._download(url, dlg)
         dlg.Destroy()
@@ -443,7 +443,8 @@ class UpdateManager(object):
                     io.close()
                     return (None,-1)
 
-        ## close dialog and IO return data and expected length of data
+        ## close dialog and IO return data and expected length of data            
+        dlg.Update(101, "download complete")
         data = io.getvalue()
         io.close()
         return (data, content_length)
